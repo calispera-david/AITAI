@@ -8,125 +8,112 @@ PROJECT_ROOT = Path(__file__).parent.parent
 KEY_FILE = os.path.join(PROJECT_ROOT, ".ai_api_key")
 # Saves the file in the user's directory under the folder "Calispera"
 # KEY_FILE = os.path.join(os.path.join(Path.home(), "Calispera"),".ai_api_key")
-print(KEY_FILE)
+
 
 class AIChatApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Agent Window 0.1")
-        self.root.geometry("900x600")
-        self.root.configure(bg = "#04030D")
+        self.root.title("Agent Window")
+        self.root.geometry("1080x840")
+        self.root.configure(bg="#000000")
+        
+        
+        # Rows (Vertical space)
+        self.root.grid_rowconfigure(0, weight=25) # Row 0 gets 58.8% of the Y axis
+        self.root.grid_rowconfigure(1, weight=1) # Row 1 gets 5.8% of the Y axis
+        self.root.grid_rowconfigure(2, weight=12) # Row 2 gets 29.4% of the Y axis
+        self.root.grid_rowconfigure(3, weight=1) # Row 3 gets 5.8% of the Y axis
 
-        # Check for API Key inside ".ai_api_key" file
-        self.api_key = self.get_or_request_api_key()
-        if not self.api_key:
-            messagebox.showerror("Error", "An API key is required to use this app.")
-            self.root.destroy()
-            return
+        # Columns (Horizontal space)
+        self.root.grid_columnconfigure(0, weight=6) # Column 0 gets 66.6% of the X axis
+        self.root.grid_columnconfigure(1, weight=2) # Column 1 gets 22.2% of the X axis
 
-        # Builds the application window
         self.setup_ui()
 
-    def get_or_request_api_key(self):
-        # Checks for a saved API key
-        print(os.path.dirname(__file__))
-        if os.path.exists(KEY_FILE):
-            with open(KEY_FILE, "r") as f:
-                apiKey = f.read().strip()
-                if(apiKey): return apiKey
-        
-        # If no file is found or if empty, request it from the user via a popup
-        key = simpledialog.askstring("API Key Required", "No API key found locally.\nPlease enter your API key:")
-        if key:
-            # Save the key for next time
-            with open(KEY_FILE, "w") as f:
-                f.write(key.strip())
-            return key.strip()
-        return None
-
     def setup_ui(self):
-        # Handles the Window UI setup
+        # ROW 0 COL 0 (CHATBOX)
+        self.chat_box_frame = tk.Frame(self.root, bg="#07121F")
+        self.chat_box_frame.grid(row=0, column=0,sticky = "nsew", padx=10, pady=(10, 5))
+        
 
-        # Main window frame
-        self.main_container = tk.PanedWindow(self.root, orient = tk.HORIZONTAL, bg = "#04030D",sashrelief = tk.FLAT, sashwidth = 6)
-        self.main_container.pack(fill = tk.BOTH, expand = True, padx = 10, pady = 10)
+        tk.Label(self.chat_box_frame, text="CHAT", bg = "#07121F", fg="white", font=("Arial Bold", 14)).pack(pady=5)
+        
 
-        # -----------------LEFT PANEL
-        self.left_panel = tk.Frame(self.main_container, bg = "#04030D")
-
-        # Chat History Area
-        self.chat_history = scrolledtext.ScrolledText(self.left_panel, wrap=tk.WORD, bg = "#04030D",state='disabled', font=("Arial", 11))
-        self.chat_history.pack( fill=tk.BOTH, expand=True)
-
-
-        self.chat_history.tag_config("UserColor", foreground="#8ab4f8")   # Light Blue
-        self.chat_history.tag_config("AgentColor", foreground="#81c995")  # Light Green
-        self.chat_history.tag_config("SystemColor", foreground="#ffffff") # Yellow
-        self.chat_history.tag_config("BoldText", font=("Arial", 11, "bold"))
-
-        # Frame for message box and send button
-        self.input_frame = tk.Frame(self.left_panel, bg = "#04030D")
-        self.input_frame.pack(fill=tk.X)
-
-        # Message Input Box
-        self.message_entry = tk.Entry(self.input_frame, font=("Arial", 12))
-        self.message_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
-        # Allow hitting Return to send instead of using the button
-        self.message_entry.bind("<Return>", self.send_message) 
-
-        # Send Button
-        self.send_button = tk.Button(self.input_frame, text="Send", bg = "#2F2FE4", fg = "white", command=self.send_message, width=8)
-        self.send_button.pack(side=tk.RIGHT)
-
-        self.main_container.add(self.left_panel, stretch="always", minsize=300)
-
-        # ---------------RIGHT PANEL
-        self.right_panel = tk.Frame(self.main_container, bg = "#04030D")
-
-        self.changes_label = tk.Label(
-            self.right_panel, text="Changes", 
-            bg="#04030D", fg="#B7B5FF", font=("Arial Bold", 20)
+        self.chat_history = scrolledtext.ScrolledText(
+            self.chat_box_frame, wrap=tk.WORD, state='disabled',
+            bg="#0B192C", fg="white", font=("Arial", 12), borderwidth=0,
+            width = 1, height = 1
         )
-        self.changes_label.pack(pady=20)
+        self.chat_history.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
-        self.main_container.add(self.right_panel, stretch="always", minsize=150)
-        # Initial Welcome Message
-        self.append_to_chat("v0.1", "Welcome! Start chatting with your AI agent or type /help for a quick guide. \n DISCLAIMER: This app is a work in progress and may not work as expected.")
-
-    def send_message(self, event=None):
-        # Handles sending the user's message
-        user_text = self.message_entry.get().strip()
-        if not user_text:
-            return # Don't send empty messages
-
-        # Display user message and clear input
-        self.append_to_chat("User", user_text)
-        self.message_entry.delete(0, tk.END)
-
-        # TO DO: Send the user input to "agent.py" and get the response
         
-        # Simulating an AI response for demonstration
-        self.root.after(500, lambda: self.append_to_chat("AI", f"This is a placeholder response to: '{user_text}'"))
 
-    def append_to_chat(self, sender, message):
-        """Safely adds a new message to the chat history."""
-        self.chat_history.config(state='normal') # Temporarily enable to insert text
+        # ROW 0 COL 1 (CHANGE HISTORY)
+        self.change_history_frame = tk.Frame(self.root, bg="#07121F")
+        self.change_history_frame.grid(row=0, column=1, sticky="nsew", padx=(0, 10), pady=(10, 5))
 
-        if sender == "User":
-            color_tag = "UserColor"
-        elif sender in ["Agent", "AI", "Gemini"]:
-            color_tag = "AgentColor"
-        else:
-            color_tag = "SystemColor" # For "System" or "Error" messages
 
-        # 2. Insert the Sender Name
-        # We can apply MULTIPLE tags by passing them as a tuple: ("BoldText", color_tag)
-        self.chat_history.insert(tk.END, f"{sender}: ", ("BoldText", color_tag))
-        self.chat_history.insert(tk.END, f"{message}\n\n", "SystemColor")
+        tk.Label(self.change_history_frame, text="CHANGE HISTORY", bg="#07121F", fg="#A0AAB5", font=("Arial Bold", 14)).pack(pady=5)
         
-        self.chat_history.see(tk.END) # Auto-scroll to the bottom
-        self.chat_history.config(state='disabled') # Disable to prevent user typing in history
 
+        self.change_history = scrolledtext.ScrolledText(
+            self.change_history_frame, wrap=tk.WORD, state='disabled',
+            bg="#0B192C", fg="#A0AAB5", font=("Arial", 10), borderwidth=0,
+            width = 1, height = 1
+        )
+        self.change_history.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        
+
+
+        # ROW 1 COL 0-1 (INPUT)
+        self.input_frame = tk.Frame(self.root, bg = "#07121F")
+        self.input_frame.grid(row = 1, column = 0, columnspan = 2, sticky = "nsew", padx = 10, pady = 5)
+
+
+        self.message_entry = tk.Text(
+            self.input_frame, font=("Arial", 12), wrap="word", height=2,
+            bg="#1E3E62", fg="white", insertbackground="white", borderwidth=0
+        )
+        self.message_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.message_entry.bind("<Return>", self.send_message)
+
+
+        self.send_button = tk.Button(
+            self.input_frame, text="SEND", font=("Arial Bold", 13),
+            bg="#FF6500", fg="white", borderwidth=0, cursor="hand2", command=self.send_message
+        )
+        self.send_button.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, 10), pady=5, ipadx=20)
+
+
+
+        # ROW 2 (SUGGESTED ACTIONS)
+        self.suggested_actions_frame = tk.Frame(self.root, bg="#07121F")
+        self.suggested_actions_frame.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
+        # grid_propagate(False) forces the frame to stay 120px tall, instead of shrinking to wrap the text inside it
+        self.suggested_actions_frame.grid_propagate(False) 
+        
+
+        tk.Label(self.suggested_actions_frame, text="SUGGESTED ACTIONS", bg="#07121F", fg="white", font=("Arial Bold", 14)).pack(pady=5)
+
+
+        self.suggested_actions = scrolledtext.ScrolledText(
+            self.suggested_actions_frame, wrap=tk.WORD, state='disabled',
+            bg="#0B192C", fg="#A0AAB5", font=("Arial", 10), borderwidth=0, 
+            width = 1, height = 1
+        )
+        self.suggested_actions.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+
+
+
+        # ROW 3 (ACCEPT CHANGES)
+        self.accept_changes_frame = tk.Frame(self.root, bg = "#07121F")
+        self.accept_changes_frame.grid(row = 3, column = 0, columnspan = 2, sticky = "nsew", padx = 10, pady = (5,10))
+
+        self.accept_changes = tk.Button(self.accept_changes_frame, text="Accept Changes", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0)
+        self.accept_changes.pack(side = tk.LEFT, fill = tk.X, expand = True, padx = 5)
+
+    def send_message(msg):
+        print("message sent to the agent")
 if __name__ == "__main__":
     root = tk.Tk()
     app = AIChatApp(root)
