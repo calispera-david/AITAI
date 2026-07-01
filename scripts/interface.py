@@ -17,7 +17,12 @@ class AIChatApp:
         self.root.geometry("1080x840")
         self.root.configure(bg="#000000")
         
-        
+        self.api_key = self.get_or_request_api()
+        if not self.api_key:
+            messagebox.showerror("Error", "A valid API key is required to use this app.")
+            self.root.destroy()
+            return
+
         # Rows (Vertical space)
         self.root.grid_rowconfigure(0, weight=25) # Row 0 gets 58.8% of the Y axis
         self.root.grid_rowconfigure(1, weight=1) # Row 1 gets 5.8% of the Y axis
@@ -29,6 +34,7 @@ class AIChatApp:
         self.root.grid_columnconfigure(1, weight=2) # Column 1 gets 22.2% of the X axis
 
         self.setup_ui()
+
 
     def setup_ui(self):
         # ROW 0 COL 0 (CHATBOX)
@@ -111,6 +117,28 @@ class AIChatApp:
 
         self.accept_changes = tk.Button(self.accept_changes_frame, text="Accept Changes", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0)
         self.accept_changes.pack(side = tk.LEFT, fill = tk.X, expand = True, padx = 5)
+
+
+    def get_or_request_api(self):
+        if (os.path.exists(KEY_FILE)):
+            with open(KEY_FILE, "r") as f:
+                return f.read().strip()
+        else:
+            key = simpledialog.askstring(
+                "Valid API Key Required",
+                "No valid API Key found \n Enter you Google API key"
+            )
+            
+            if key:
+                with open(KEY_FILE, "w") as f:
+                    f.write(key.strip())
+                return key
+        
+        return None
+
+    def close_app():
+        print("closing and saving")
+
 
     def send_message(msg):
         print("message sent to the agent")

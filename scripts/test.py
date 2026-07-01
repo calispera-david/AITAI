@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
-project_root = Path(__file__).parent.parent
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 print(project_root)
