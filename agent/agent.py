@@ -11,7 +11,7 @@ with open(KEY_FILE, "r") as f:
     api_key =  f.read().strip()
 os.environ["GOOGLE_API_KEY"] = api_key
 
-root_agent = Agent(
+agent = Agent(
     model='gemini-2.5-flash',
     name='agent',
     description='A helpful assistant for user questions.',

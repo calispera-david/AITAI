@@ -19,7 +19,7 @@ class AIChatApp:
         
         self.api_key = self.get_or_request_api()
         if not self.api_key:
-            messagebox.showerror("Error", "A valid API key is required to use this app.")
+            messagebox.showerror("Error", "A valid Google API key is required to use this app.")
             self.root.destroy()
             return
 
@@ -122,17 +122,19 @@ class AIChatApp:
     def get_or_request_api(self):
         if (os.path.exists(KEY_FILE)):
             with open(KEY_FILE, "r") as f:
-                return f.read().strip()
-        else:
-            key = simpledialog.askstring(
-                "Valid API Key Required",
-                "No valid API Key found \n Enter you Google API key"
-            )
+                key_text = f.read().strip()
+                if key_text:
+                    return key_text
+        
+        key = simpledialog.askstring(
+            "Valid Google API Key Required",
+            "No valid API Key found \n Enter your Google API key \n Other LLM options not yet available"
+        )
             
-            if key:
-                with open(KEY_FILE, "w") as f:
-                    f.write(key.strip())
-                return key
+        if key:
+            with open(KEY_FILE, "w") as f:
+                f.write(key.strip())
+            return key
         
         return None
 
@@ -142,7 +144,7 @@ class AIChatApp:
 
     def send_message(msg):
         print("message sent to the agent")
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = AIChatApp(root)
-    root.mainloop()
+        
+root = tk.Tk()
+app = AIChatApp(root)
+root.mainloop()
