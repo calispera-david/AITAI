@@ -2,6 +2,10 @@ import tkinter as tk
 from tkinter import simpledialog, scrolledtext, messagebox
 import os
 from pathlib import Path
+import datetime
+import threading
+from google.genai import types
+import asyncio
 
 # File to store the API key locally
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -11,14 +15,25 @@ KEY_FILE = os.path.join(PROJECT_ROOT, ".ai_api_key")
 
 
 class AIChatApp:
-    def __init__(self, root):
+    def __init__(self, root, chat_runner,session_id):
+        # startup tk stuff
         self.root = root
         self.root.title("Agent Window")
         self.root.geometry("1080x840")
         self.root.configure(bg="#000000")
+        # gets the chat_runner from main.py which initializes a session
+        self.chat_runner = chat_runner
+        # A thinking boolean which allows to send messages only after the agent finished responding or at the start of the conversation
+        self.thinking = False
+        # Gets the session_id from main.py which consists of the date,hours,minutes and seconds
+        # Will later add chat saving and loading based on the dates
+        self.session_id = session_id
+        print("Session ID: ", session_id)
         
+        # Self explanatory, if the api file is not found it prompts for one
         self.api_key = self.get_or_request_api()
         if not self.api_key:
+            # If the user doesn't input any text
             messagebox.showerror("Error", "A valid Google API key is required to use this app.")
             self.root.destroy()
             return
@@ -47,8 +62,8 @@ class AIChatApp:
 
         self.chat_history = scrolledtext.ScrolledText(
             self.chat_box_frame, wrap=tk.WORD, state='disabled',
-            bg="#0B192C", fg="white", font=("Arial", 12), borderwidth=0,
-            width = 1, height = 1
+            bg="#0B192C", fg="white", font=("Arial Bold", 12), borderwidth=0,
+            width = 1, height = 1, padx = 5,pady = 5
         )
         self.chat_history.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
@@ -78,16 +93,17 @@ class AIChatApp:
 
         self.message_entry = tk.Text(
             self.input_frame, font=("Arial", 12), wrap="word", height=2,
-            bg="#1E3E62", fg="white", insertbackground="white", borderwidth=0
+            bg="#1E3E62", fg="white", insertbackground="white", borderwidth=0,
+            padx = 5, pady = 5
         )
         self.message_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self.message_entry.bind("<Return>", self.send_message)
+        # Removed the ability to send using enter in order to be able to make new lines
+        # self.message_entry.bind("<Return>", self.send_message)
 
 
         self.send_button = tk.Button(
             self.input_frame, text="SEND", font=("Arial Bold", 13),
-            bg="#FF6500", fg="white", borderwidth=0, cursor="hand2", command=self.send_message
-        )
+            bg="#FF6500", fg="white", borderwidth=0, cursor="hand2", command=self.send_message)
         self.send_button.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, 10), pady=5, ipadx=20)
 
 
@@ -120,17 +136,21 @@ class AIChatApp:
 
 
     def get_or_request_api(self):
+        # Checks for the file in the chosen path
         if (os.path.exists(KEY_FILE)):
             with open(KEY_FILE, "r") as f:
                 key_text = f.read().strip()
                 if key_text:
+                    # if a key is found it returns it
                     return key_text
         
+        # if not, prompts the user for it
         key = simpledialog.askstring(
             "Valid Google API Key Required",
-            "No valid API Key found \n Enter your Google API key \n Other LLM options not yet available"
+            "Enter your Google API key \n Other LLM options not yet available"
         )
             
+        # writes the key into file 
         if key:
             with open(KEY_FILE, "w") as f:
                 f.write(key.strip())
@@ -138,13 +158,68 @@ class AIChatApp:
         
         return None
 
-    def close_app():
+    def _close_app(self):
         print("closing and saving")
 
 
-    def send_message(msg):
-        print("message sent to the agent")
+    def send_message(self):
+        print("sending message to the agent")
+        msg = self.message_entry.get("1.0", "end-1c").strip()
+        if msg and self.thinking == False:
+            self._append_to_chat("USER",msg)
+
+            self.message_entry.delete("1.0", "end")
+            self.thinking = True
+
+            self._append_to_chat("SYSTEM", "Agent is thinking...")
+
+            threading.Thread(target=self._send_to_agent, args=(msg,), daemon=True).start()
+    
+
+    def _send_to_agent(self,user_text):
+        try:
+            user_msg = types.Content(role="user", parts=[types.Part(text=user_text)])
+
+            final_text = ""
+
+            events = self.chat_runner.run(
+                user_id="default_user",
+                session_id= self.session_id, 
+                new_message=user_msg
+            )
+            for event in events:
+                if event.content and event.content.parts:
+                    final_text = event.content.parts[0].text
+                
+            ai_reply = final_text
+            self.root.after(0, self._replace_thinking_with_response, "Agent", ai_reply)
+
+        except Exception as e:
+            self.root.after(0, self._replace_thinking_with_response, f"Error Code {e.code}", e.message)
+            self._error(e)
+            
+    
+    def _replace_thinking_with_response(self, sender, message):
+        self.chat_history.config(state='normal')
+        self.chat_history.delete("end-3l", "end-1c")
+        self.chat_history.config(state='disabled')
         
-root = tk.Tk()
-app = AIChatApp(root)
-root.mainloop()
+        self._append_to_chat(sender, message)
+        
+        self.thinking = False
+        self.message_entry.focus_set()
+    
+    def _append_to_chat(self,sender,message):
+        self.chat_history.config(state='normal')
+        self.chat_history.insert("end", f"{sender}: {message}\n\n")
+        self.chat_history.see("end")
+        self.chat_history.config(state='disabled')
+    
+    def _error(self,e):
+        # prompts an error box 
+        print(e)
+        messagebox.showerror(f"Error Code: {e.code}", e.message)
+        
+# root = tk.Tk()
+# app = AIChatApp(root)
+# root.mainloop()
