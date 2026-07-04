@@ -8,13 +8,17 @@ from pathlib import Path
 import asyncio
 import threading
 import datetime
+import json
 
 from scripts.interface import AIChatApp
 import tkinter as tk
-from tkinter import simpledialog, messagebox
+from tkinter import simpledialog, messagebox, filedialog
 
 PROJECT_ROOT = Path(__file__).parent
 KEY_FILE = os.path.join(PROJECT_ROOT, ".ai_api_key")
+CHATS_FOLDER  = os.path.join(PROJECT_ROOT, "chats")
+os.makedirs(CHATS_FOLDER, exist_ok=True)
+
 
 api_key = ""
 with open(KEY_FILE, "r") as f: 
@@ -34,7 +38,7 @@ def main():
         chat_memory = InMemorySessionService()
         chat_runner = Runner(agent = agent, session_service = chat_memory, app_name = "csv_analyzer")
         
-        session_id = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+        session_id = chat_picker()[0]
         session = asyncio.run(chat_memory.create_session(
             app_name="csv_analyzer", 
             user_id="default_user", 
@@ -86,6 +90,85 @@ def verify_api_key():
             exit()
 
 verify_api_key()
+
+# Custom launcher to laod or start new chats
+def chat_picker():
+    # Creates a Launcher Window
+    result = {"session_id": None, "filepath": None}
+    launcher = tk.Tk()
+    launcher.title("AITAI Launcher")
+    launcher.geometry("450x500")
+    launcher.configure(bg="#07121F")
+
+    tk.Label(launcher, text="Select an Existing Workspace:", bg="#07121F", fg="white", font=("Arial Bold", 14)).pack(pady=(20, 5))
+
+    # Create a frame to hold the list and scrollbar
+    list_frame = tk.Frame(launcher, bg="#07121F")
+    list_frame.pack(fill="both", expand=True, padx=30, pady=5)
+    
+    scrollbar = tk.Scrollbar(list_frame)
+    scrollbar.pack(side="right", fill="y")
+    
+    chat_listbox = tk.Listbox(list_frame, font=("Arial", 12), bg="#0B192C", fg="white", selectbackground="#FF6500", borderwidth=0, yscrollcommand=scrollbar.set)
+    chat_listbox.pack(side="left", fill="both", expand=True)
+    scrollbar.config(command=chat_listbox.yview)
+    
+    # Read the chats folder and populate the listbox
+    existing_files = [f for f in os.listdir(CHATS_FOLDER) if f[-5:] == ".json"]
+    for f in existing_files:
+        # Remove the .json extension for a cleaner look
+        chat_listbox.insert(tk.END, f.replace(".json", ""))
+
+    
+    def on_load_click():
+        # Triggered when the user clicks 'Load Workspace'
+        selection = chat_listbox.curselection()
+        if selection:
+            session_id = chat_listbox.get(selection[0])
+            result["session_id"] = session_id
+            result["filepath"] = os.path.join(CHATS_FOLDER, f"{session_id}.json")
+            launcher.destroy() # Close the launcher
+        else:
+            messagebox.showwarning("Oops", "Please select a chat from the list first!", parent=launcher)
+    
+    tk.Button(launcher, text="Load Workspace", bg="#1E3E62", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=on_load_click).pack(pady=(5, 20), ipadx=10, ipady=5)
+
+    tk.Frame(launcher, bg="#1E3E62", height=2).pack(fill="x", padx=30, pady=10)
+
+    tk.Label(launcher, text="Or Create a New Workspace:", bg="#07121F", fg="white", font=("Arial Bold", 14)).pack(pady=(10, 5))
+
+    new_name_entry = tk.Entry(launcher, font=("Arial", 12), bg="#0B192C", fg="white", borderwidth=0, insertbackground="white")
+    new_name_entry.pack(fill="x", padx=30, pady=5, ipady=5)
+    new_name_entry.insert(0, "e.g., housing_analysis")
+
+    def clear_placeholder(event):
+        if new_name_entry.get() == "e.g., housing_analysis":
+            new_name_entry.delete(0, tk.END)
+    
+    new_name_entry.bind("<FocusIn>", clear_placeholder)
+    def on_create_click():
+        # Triggered when the user clicks 'Create New'
+        raw_name = new_name_entry.get()
+        
+        # If they left it blank or didn't change the placeholder, use a timestamp
+        if raw_name.strip() == "" or raw_name == "e.g., housing_analysis":
+            session_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        else:
+            # Clean weird characters
+            session_id = "".join([c for c in raw_name if c.isalnum() or c in (' ', '-', '_')]).strip()
+            
+        result["session_id"] = session_id
+        result["filepath"] = os.path.join(CHATS_FOLDER, f"{session_id}.json")
+        json_file = open(result["filepath"], "w", encoding="utf-8")
+        launcher.destroy() # Close the launcher
+
+    tk.Button(launcher, text="Create New", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=on_create_click).pack(pady=(5, 30), ipadx=20, ipady=5)
+
+    # 2. Tell Python to pause the script here until the launcher window is closed
+    launcher.wait_window()
+
+    return result["session_id"], result["filepath"]
+
 
 if __name__ == "__main__":
     main()

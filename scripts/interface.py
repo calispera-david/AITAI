@@ -10,17 +10,21 @@ import asyncio
 # File to store the API key locally
 PROJECT_ROOT = Path(__file__).parent.parent
 KEY_FILE = os.path.join(PROJECT_ROOT, ".ai_api_key")
-# Saves the file in the user's directory under the folder "Calispera"
+CHATS_FOLDER  = os.path.join(PROJECT_ROOT, "chats")
+
+
 # KEY_FILE = os.path.join(os.path.join(Path.home(), "Calispera"),".ai_api_key")
+# CHATS_FOLDER  = os.path.join(os.path.join(Path.home(), "Calispera"),"chats")
 
 
 class AIChatApp:
     def __init__(self, root, chat_runner,session_id):
         # startup tk stuff
         self.root = root
-        self.root.title("Agent Window")
+        self.root.title(f"AITAI: {session_id}")
         self.root.geometry("1080x840")
         self.root.configure(bg="#000000")
+        self.root.protocol("WM_DELETE_WINDOW", self._close_app)
         # gets the chat_runner from main.py which initializes a session
         self.chat_runner = chat_runner
         # A thinking boolean which allows to send messages only after the agent finished responding or at the start of the conversation
@@ -160,7 +164,7 @@ class AIChatApp:
 
     def _close_app(self):
         print("closing and saving")
-
+        self.root.destroy()
 
     def send_message(self):
         print("sending message to the agent")
