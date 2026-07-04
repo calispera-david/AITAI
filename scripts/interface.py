@@ -163,8 +163,34 @@ class AIChatApp:
         return None
 
     def _close_app(self):
-        print("closing and saving")
-        self.root.destroy()
+        print("closing")
+        history_to_save = []
+        save_file_path = os.path.join(os.path.join(PROJECT_ROOT,"chats"),f"{self.session_id}.json")
+        res = messagebox.askyesno("Exit", "Do you want to save your chat before you exit?")
+        if res:
+            try:
+                for msg in current_session.history:
+                    if msg.parts:
+                        history_to_save.append({
+                            "role": msg.role,
+                            "text": msg.parts[0].text
+                        })
+                with open(save_file_path, "w") as f:
+                    json.dump(history_to_save,f)
+                
+                self.root.destroy()
+                
+            except Exception as e:
+                self._error(e)
+                print(e)
+                res = messagebox.askyesno("Error", "Error while saving \nDo you want to exit without saving?")
+                if res:
+                    self.root.destroy()
+        else:
+            res = messagebox.askyesno("Exit", "Are you sure you don't want to save?")
+            if res:
+                self.root.destroy()
+            
 
     def send_message(self):
         print("sending message to the agent")
