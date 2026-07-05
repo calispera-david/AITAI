@@ -18,13 +18,12 @@ CHATS_FOLDER  = os.path.join(PROJECT_ROOT, "chats")
 
 
 class AIChatApp:
-    def __init__(self, root, chat_runner,session_id):
+    def __init__(self, root, chat_runner,session_id,session):
         # startup tk stuff
         self.root = root
         self.root.title(f"AITAI: {session_id}")
         self.root.geometry("1080x840")
         self.root.configure(bg="#000000")
-        self.root.protocol("WM_DELETE_WINDOW", self._close_app)
         # gets the chat_runner from main.py which initializes a session
         self.chat_runner = chat_runner
         # A thinking boolean which allows to send messages only after the agent finished responding or at the start of the conversation
@@ -32,6 +31,7 @@ class AIChatApp:
         # Gets the session_id from main.py which consists of the date,hours,minutes and seconds
         # Will later add chat saving and loading based on the dates
         self.session_id = session_id
+        self.session = session
         print("Session ID: ", session_id)
         
         # Self explanatory, if the api file is not found it prompts for one
@@ -162,35 +162,6 @@ class AIChatApp:
         
         return None
 
-    def _close_app(self):
-        print("closing")
-        history_to_save = []
-        save_file_path = os.path.join(os.path.join(PROJECT_ROOT,"chats"),f"{self.session_id}.json")
-        res = messagebox.askyesno("Exit", "Do you want to save your chat before you exit?")
-        if res:
-            try:
-                for msg in current_session.history:
-                    if msg.parts:
-                        history_to_save.append({
-                            "role": msg.role,
-                            "text": msg.parts[0].text
-                        })
-                with open(save_file_path, "w") as f:
-                    json.dump(history_to_save,f)
-                
-                self.root.destroy()
-                
-            except Exception as e:
-                self._error(e)
-                print(e)
-                res = messagebox.askyesno("Error", "Error while saving \nDo you want to exit without saving?")
-                if res:
-                    self.root.destroy()
-        else:
-            res = messagebox.askyesno("Exit", "Are you sure you don't want to save?")
-            if res:
-                self.root.destroy()
-            
 
     def send_message(self):
         print("sending message to the agent")
@@ -202,8 +173,10 @@ class AIChatApp:
             self.thinking = True
 
             self._append_to_chat("SYSTEM", "Agent is thinking...")
-
-            threading.Thread(target=self._send_to_agent, args=(msg,), daemon=True).start()
+            try:
+                threading.Thread(target=self._send_to_agent, args=(msg,), daemon=True).start()
+            except Exception as e:
+                _error(e)
     
 
     def _send_to_agent(self,user_text):
@@ -218,14 +191,35 @@ class AIChatApp:
                 new_message=user_msg
             )
             for event in events:
-                if event.content and event.content.parts:
+
+                print("\n--- RAW ADK EVENT ---")
+                print(event)
+                if hasattr(event, 'content') and event.content and event.content.parts:
                     final_text = event.content.parts[0].text
-                
+                    
+
+                elif hasattr(event, 'error_code') and event.error_code:
+                    error_details = getattr(event, 'error_message', 'Unknown API Error')
+                    raise RuntimeError(f"{event.error_code} - {error_details}")
+            if not final_text:
+                raise ValueError("API returned no text. You likely hit a quota limit or safety block.")
+            
             ai_reply = final_text
             self.root.after(0, self._replace_thinking_with_response, "Agent", ai_reply)
 
         except Exception as e:
-            self.root.after(0, self._replace_thinking_with_response, f"Error Code {e.code}", e.message)
+            error_type = type(e).__name__
+            raw_error_message = str(e)
+            
+            error_sender = "ERROR"
+            formatted_message = f"[{error_type}] {raw_error_message}"
+            
+            # Add a friendly note if it smells like a quota issue
+            if "quota" in raw_error_message.lower() or "429" in raw_error_message or "API returned no text" in raw_error_message:
+                formatted_message += "\n\n(It looks like you ran out of Google API quota! Take a quick break and try again later.)"
+                
+            # Push the formatted error to the chat screen
+            self.root.after(0, self._replace_thinking_with_response, error_sender, formatted_message)
             self._error(e)
             
     
@@ -247,8 +241,12 @@ class AIChatApp:
     
     def _error(self,e):
         # prompts an error box 
-        print(e)
-        messagebox.showerror(f"Error Code: {e.code}", e.message)
+        print("GOT AN ERROR")
+        if hasattr(e, "code"):
+            messagebox.showerror(f"Error Code: {e.code}", e.message)
+        else:
+            messagebox.showerror("Error", e)
+
         
 # root = tk.Tk()
 # app = AIChatApp(root)

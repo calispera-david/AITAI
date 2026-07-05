@@ -1,6 +1,7 @@
 from agent.agent import agent
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
+from google.adk.events import Event
 from google.genai import types
 from google import genai
 import os
@@ -9,6 +10,7 @@ import asyncio
 import threading
 import datetime
 import json
+
 
 from scripts.interface import AIChatApp
 import tkinter as tk
@@ -26,7 +28,17 @@ with open(KEY_FILE, "r") as f:
 os.environ["GOOGLE_API_KEY"] = api_key
 
 def _error(e):
-    messagebox.showerror(f"Error Code: {e.code}",e.message)
+    # prompts an error box 
+    if not isinstance(e, (NameError, ValueError, TypeError, AttributeError, IndexError, KeyError)):
+        messagebox.showerror(f"Error Code: {e.code}", e.message)
+    else:
+        messagebox.showerror("Error", e)
+        print(e)
+
+
+            
+
+
 
 def main():
     try:
@@ -38,21 +50,63 @@ def main():
         chat_memory = InMemorySessionService()
         chat_runner = Runner(agent = agent, session_service = chat_memory, app_name = "csv_analyzer")
         
-        session_id = chat_picker()[0]
-        session = asyncio.run(chat_memory.create_session(
-            app_name="csv_analyzer", 
-            user_id="default_user", 
-            session_id=session_id
-        ))
+        picker_result = chat_picker()
+        session_id = picker_result[0]
+        session = None
+        if not (picker_result[0] == None or picker_result[1] == None):
+            session = asyncio.run(chat_memory.create_session(
+                app_name="csv_analyzer", 
+                user_id="default_user", 
+                session_id=session_id
+            ))
 
-        # starts the UI
-        root = tk.Tk()
-        app = AIChatApp(root, chat_runner, session_id)
-        root.mainloop()
+            # starts the UI
+            root = tk.Tk()
+            def _close_app():
+                if app.thinking:
+                    return 0
+                print("closing")
+                history_to_save = []
+                save_file_path = os.path.join(os.path.join(PROJECT_ROOT,"chats"),f"{session_id}.json")
+                res = messagebox.askyesno("Exit", "Do you want to save your chat before you exit?")
+                if res:
+                    try:
+                        
+                        latest_session = asyncio.run(chat_memory.get_session(
+                            app_name="csv_analyzer", 
+                            user_id="default_user", 
+                            session_id=session_id
+                            ))
+
+                        for event in latest_session.events:
+                            print(event,"\n\n")
+                            if hasattr(event, 'content') and event.content and event.content.parts:
+                                history_to_save.append({
+                                    "role": event.content.role,
+                                    "text": event.content.parts[0].text
+                                })
+                        with open(save_file_path, "w") as f:
+                            json.dump(history_to_save,f)
+                        
+                        root.destroy()
+                        
+                    except Exception as e:
+                        _error(e)
+                        res = messagebox.askyesno("Error", "Error while saving \nDo you want to exit without saving?")
+                        if res:
+                            root.destroy()
+                else:
+                    res = messagebox.askyesno("Exit", "Are you sure you don't want to save?")
+                    if res:
+                        root.destroy()
+            root.protocol("WM_DELETE_WINDOW", _close_app)
+            app = AIChatApp(root, chat_runner, session_id, session)
+            root.mainloop()
+        else:
+            exit()
     except Exception as e:
         print("Initialization failed")
         print(e)
-        print("line 50")
 
 def prompt_api_key():
     key = simpledialog.askstring(
@@ -89,7 +143,6 @@ def verify_api_key():
         else:
             exit()
 
-verify_api_key()
 
 # Custom launcher to laod or start new chats
 def chat_picker():
@@ -159,7 +212,8 @@ def chat_picker():
             
         result["session_id"] = session_id
         result["filepath"] = os.path.join(CHATS_FOLDER, f"{session_id}.json")
-        json_file = open(result["filepath"], "w", encoding="utf-8")
+        # decided to NOT start an empty file from the start
+        # json_file = open(result["filepath"], "w", encoding="utf-8")
         launcher.destroy() # Close the launcher
 
     tk.Button(launcher, text="Create New", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=on_create_click).pack(pady=(5, 30), ipadx=20, ipady=5)
@@ -170,6 +224,8 @@ def chat_picker():
     return result["session_id"], result["filepath"]
 
 
+
+# verify_api_key()
 if __name__ == "__main__":
     main()
 
