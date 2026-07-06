@@ -61,6 +61,7 @@ def main():
                 if app.thinking:
                     return 0
                 print("closing")
+                root.focus_force()
                 history_to_save = []
                 save_file_path = os.path.join(os.path.join(PROJECT_ROOT,"chats"),f"{session_id}.json")
                 res = messagebox.askyesno("Exit", "Do you want to save your chat before you exit?")
