@@ -1,4 +1,3 @@
-from agent.agent import agent
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.adk.events import Event
@@ -22,10 +21,6 @@ CHATS_FOLDER  = os.path.join(PROJECT_ROOT, "chats")
 os.makedirs(CHATS_FOLDER, exist_ok=True)
 
 
-api_key = ""
-with open(KEY_FILE, "r") as f: 
-    api_key =  f.read().strip()
-os.environ["GOOGLE_API_KEY"] = api_key
 
 def _error(e):
     # prompts an error box 
@@ -117,10 +112,36 @@ def prompt_api_key():
     if key:
         with open(KEY_FILE, "w") as f:
             f.write(key.strip())
-            
+        verify_api_key()
     else:
         messagebox.showerror("Error", "A valid Google API key is required to use this app.")
+    
+def get_or_request_api():
+        # Checks for the file in the chosen path
+        if (os.path.exists(KEY_FILE)):
+            with open(KEY_FILE, "r") as f:
+                key_text = f.read().strip()
+                if key_text:
+                    # if a key is found it returns it
+                    return key_text
+        
+        # if not, prompts the user for it
+        key = simpledialog.askstring(
+            "Valid Google API Key Required",
+            "Enter your Google API key \n Other LLM options not yet available"
+        )
+            
+        # writes the key into file 
+        if key:
+            with open(KEY_FILE, "w") as f:
+                f.write(key.strip())
+            return key
+        
+        return None
 def verify_api_key():
+    api_key = ""
+    api_key = get_or_request_api()
+    os.environ["GOOGLE_API_KEY"] = api_key
     try:
         client = genai.Client()
 
@@ -137,9 +158,12 @@ def verify_api_key():
             
     except Exception as e:
         _error(e)
-        if e.code == 400:
-            # Prompts the user for the key
-            prompt_api_key()
+        if hasattr(e, "code"):
+            if e.code == 400:
+                with open(KEY_FILE , 'w') as f:
+                    f.write("".strip())
+                # Prompts the user for the key
+                prompt_api_key()
         else:
             exit()
 
@@ -225,7 +249,8 @@ def chat_picker():
 
 
 
-# verify_api_key()
+verify_api_key()
+from agent.agent import agent
 if __name__ == "__main__":
     main()
 

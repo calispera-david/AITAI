@@ -5,7 +5,9 @@ import os
 
 PROJECT_ROOT = Path(__file__).parent.parent
 KEY_FILE = os.path.join(PROJECT_ROOT, ".ai_api_key")
-
+if not os.path.exists(KEY_FILE):
+    with open(KEY_FILE, 'x') as f:
+        print("Created API Key File")
 
 with open(KEY_FILE, "r") as f: 
     api_key =  f.read().strip()
