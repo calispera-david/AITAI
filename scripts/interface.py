@@ -6,6 +6,7 @@ import datetime
 import threading
 from google.genai import types
 import asyncio
+import json
 
 # File to store the API key locally
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -58,6 +59,7 @@ class AIChatApp:
                 with open(self.session_path,"r") as f:
                     self.ui_history = json.load(f)
             except Exception as e:
+                self._error(e)
                 self._error("Chat found but can't be loaded\nTry again later.")
                 exit()
         self.setup_ui()
@@ -79,7 +81,10 @@ class AIChatApp:
         )
         self.chat_history.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
         for chat in self.ui_history:
-            self._append_to_chat(ui_history[0],ui_history[1])
+            if chat.get("role") == "user":
+                self._append_to_chat("USER",chat.get("text"))
+            else:
+                self._append_to_chat("AGENT",chat.get("text"))
         
 
         # ROW 0 COL 1 (CHANGE HISTORY)
@@ -173,7 +178,6 @@ class AIChatApp:
 
 
     def send_message(self):
-        print("sending message to the agent")
         msg = self.message_entry.get("1.0", "end-1c").strip()
         if msg and self.thinking == False:
             self._append_to_chat("USER",msg)

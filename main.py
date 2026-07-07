@@ -9,6 +9,8 @@ import asyncio
 import threading
 import datetime
 import json
+import time
+import uuid
 
 
 from scripts.interface import AIChatApp
@@ -52,11 +54,35 @@ def main():
                 app_name="csv_analyzer", 
                 user_id="default_user", 
                 session_id=session_id
-            ))
+            ))        
+            session_path = os.path.join("chats",f"{session_id}.json")
+            if os.path.exists(session_path):
+                print("loading")
+                saved_data =[]
+                with open(session_path, "r") as f:
+                    saved_data = json.load(f)
+                base_time = time.time() - 1000
+                for index,item in enumerate(saved_data):
+                    fake_id = str(uuid.uuid4())
+                    fake_timestamp = base_time + index
 
+
+                    rebuilt_event = Event(
+                        id=fake_id,
+                        timestamp=fake_timestamp,
+                        author="user" if item["role"] == "user" else "agent",
+                        turn_complete=True,
+                        content=types.Content(
+                            role=item["role"],
+                            parts=[types.Part(text=item["text"])]
+                        )
+                    )
+                    asyncio.run(chat_memory.append_event(session, rebuilt_event))
             # starts the UI
             root = tk.Tk()
             app = AIChatApp(root, chat_runner, session_id, session)
+
+
             def _close_app():
                 if app.thinking:
                     return 0
@@ -95,11 +121,13 @@ def main():
                     res = messagebox.askyesno("Exit", "Are you sure you don't want to save?")
                     if res:
                         root.destroy()
+
+
             root.protocol("WM_DELETE_WINDOW", _close_app)
             root.mainloop()
     except Exception as e:
         print("Initialization failed")
-        print(e)
+        _error(e)
 
 def prompt_api_key():
     key = simpledialog.askstring(
@@ -230,20 +258,19 @@ def chat_picker():
         file_name = raw_name + ".json"
         if file_name in existing_files:
             messagebox.showwarning("Warning","This file exists already\nConsider changing the name of your workspace or renaming the existing file")
-            return None
-            
-        # If they left it blank or didn't change the placeholder, use a timestamp
-        if raw_name.strip() == "" or raw_name == "e.g., housing_analysis":
-            session_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        else:
-            # Clean weird characters
-            session_id = "".join([c for c in raw_name if c.isalnum() or c in (' ', '-', '_')]).strip()
-            
-        result["session_id"] = session_id
-        result["filepath"] = os.path.join(CHATS_FOLDER, f"{session_id}.json")
-        # decided to NOT start an empty file from the start
-        # json_file = open(result["filepath"], "w", encoding="utf-8")
-        launcher.destroy() # Close the launcher
+        else:     
+            # If they left it blank or didn't change the placeholder, use a timestamp
+            if raw_name.strip() == "" or raw_name == "e.g., housing_analysis":
+                session_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            else:
+                # Clean weird characters
+                session_id = "".join([c for c in raw_name if c.isalnum() or c in (' ', '-', '_')]).strip()
+                
+            result["session_id"] = session_id
+            result["filepath"] = os.path.join(CHATS_FOLDER, f"{session_id}.json")
+            # decided to NOT start an empty file from the start
+            # json_file = open(result["filepath"], "w", encoding="utf-8")
+            launcher.destroy() # Close the launcher
 
     tk.Button(launcher, text="Create New", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=on_create_click).pack(pady=(5, 30), ipadx=20, ipady=5)
 
