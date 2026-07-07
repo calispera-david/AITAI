@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import asyncio
 import threading
-import datetime
+from datetime import datetime
 import json
 import time
 import uuid
@@ -57,56 +57,48 @@ def main():
             ))        
             session_path = os.path.join("chats",f"{session_id}.json")
             if os.path.exists(session_path):
-                print("loading")
                 saved_data =[]
                 with open(session_path, "r") as f:
                     saved_data = json.load(f)
-                base_time = time.time() - 1000
+                
                 for item in saved_data:
                     # fake_id = str(uuid.uuid4())
                     # fake_timestamp = base_time + index
 
-
-                    rebuilt_event = Event(
-                        author="user" if item["role"] == "user" else "agent",
-                        turn_complete=True,
-                        content=types.Content(
-                            role=item["role"],
-                            parts=[types.Part(text=item["text"])]
+                    if item["role"] == "user" or item["role"] == "agent":
+                        rebuilt_event = Event(
+                            author="user" if item["role"] == "user" else "agent",
+                            turn_complete=True,
+                            content=types.Content(
+                                role= "user" if item["role"] == "user" else "model",
+                                parts=[types.Part(text=item["text"])]
+                            )
                         )
-                    )
-                    asyncio.run(chat_memory.append_event(session, rebuilt_event))
+                        asyncio.run(chat_memory.append_event(session, rebuilt_event))
+            
             # starts the UI
             root = tk.Tk()
             app = AIChatApp(root, chat_runner, session_id, session)
-
 
             def _close_app():
                 if app.thinking:
                     return 0
                 print("closing")
                 root.focus_force()
-                
                 history_to_save = []
                 save_file_path = os.path.join(os.path.join(PROJECT_ROOT,"chats"),f"{session_id}.json")
                 res = messagebox.askyesno("Exit", "Do you want to save your chat before you exit?")
-                print(res)
                 if res:
                     try:
                         
-                        latest_session = asyncio.run(chat_memory.get_session(
-                            app_name="csv_analyzer", 
-                            user_id="default_user", 
-                            session_id=session_id
-                            ))
-
-                        for event in latest_session.events:
-                            print(event,"\n\n")
-                            if hasattr(event, 'content') and event.content and event.content.parts:
+                        history = app.ui_history
+                        for index,entry in enumerate(history):
+                            if not (entry["role"] == "user" and index == len(history) - 1):
                                 history_to_save.append({
-                                    "role": event.content.role,
-                                    "text": event.content.parts[0].text
+                                    "role": entry["role"],
+                                    "text": entry["text"]
                                 })
+                        print(history_to_save)
                         with open(save_file_path, "w") as f:
                             json.dump(history_to_save,f)
                         
@@ -122,12 +114,11 @@ def main():
                     if res:
                         root.destroy()
                 
-
-
             root.protocol("WM_DELETE_WINDOW", _close_app)
             root.mainloop()
     except Exception as e:
         print("Initialization failed")
+        print(e)
         _error(e)
 
 def prompt_api_key():
@@ -194,7 +185,7 @@ def verify_api_key():
         exit()
 
 
-# Custom launcher to laod or start new chats
+# Custom launcher to load or start new chats
 def chat_picker():
     # Creates a Launcher Window
     result = {"session_id": None, "filepath": None}
@@ -219,7 +210,7 @@ def chat_picker():
     # Read the chats folder and populate the listbox
     existing_files = [f for f in os.listdir(CHATS_FOLDER) if f[-5:] == ".json"]
     for f in existing_files:
-        # Remove the .json extension for a cleaner look
+        # Remove the .json extension
         chat_listbox.insert(tk.END, f.replace(".json", ""))
 
     
@@ -275,34 +266,13 @@ def chat_picker():
 
     tk.Button(launcher, text="Create New", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=on_create_click).pack(pady=(5, 30), ipadx=20, ipady=5)
 
-    # 2. Tell Python to pause the script here until the launcher window is closed
     launcher.wait_window()
 
     return result["session_id"], result["filepath"]
 
 
 
-# verify_api_key()
+verify_api_key()
 from agent.agent import agent
 if __name__ == "__main__":
     main()
-
-
-# msg = input("USER: ")
-# while msg:
-#     user_message = types.Content(
-#         role="user",
-#         parts=[types.Part(text=msg)]
-#     )
-
-#     events = chat_runner.run(
-#     user_id="default_user",
-#     session_id="user_1", 
-#     new_message=user_message
-#     )
-
-#     for event in events:
-#         if event.content and event.content.parts:
-#             final_text = event.content.parts[0].text
-#             print("AI: ", final_text)
-#     msg = input("USER: ")

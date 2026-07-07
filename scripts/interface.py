@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import simpledialog, scrolledtext, messagebox
 import os
 from pathlib import Path
-import datetime
+from datetime import datetime
 import threading
 from google.genai import types
 import asyncio
@@ -28,7 +28,9 @@ class AIChatApp:
         # gets the chat_runner from main.py which initializes a session
         self.chat_runner = chat_runner
         # A thinking boolean which allows to send messages only after the agent finished responding or at the start of the conversation
+        # A loading boolean which stops appending messages to the history while it loads them
         self.thinking = False
+        self.loading = True
         # Gets the session_id from main.py which consists of the date,hours,minutes and seconds
         # Will later add chat saving and loading based on the dates
         self.session_id = session_id
@@ -54,6 +56,7 @@ class AIChatApp:
         self.root.grid_columnconfigure(1, weight=2) # Column 1 gets 22.2% of the X axis
         self.ui_history = []
         self.session_path = os.path.join(CHATS_FOLDER, f"{self.session_id}.json")
+        # If the file exists load it
         if os.path.exists(self.session_path):
             try:
                 with open(self.session_path,"r") as f:
@@ -70,7 +73,6 @@ class AIChatApp:
         self.chat_box_frame = tk.Frame(self.root, bg="#07121F")
         self.chat_box_frame.grid(row=0, column=0,sticky = "nsew", padx=10, pady=(10, 5))
         
-
         tk.Label(self.chat_box_frame, text="CHAT", bg = "#07121F", fg="white", font=("Arial Bold", 14)).pack(pady=5)
         
 
@@ -80,12 +82,17 @@ class AIChatApp:
             width = 1, height = 1, padx = 5,pady = 5
         )
         self.chat_history.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        # Loads chat from ui_history (if it's a new chat it won't do anything since ui_history starts as an empty list)
         for chat in self.ui_history:
             if chat.get("role") == "user":
                 self._append_to_chat("USER",chat.get("text"))
-            else:
+            elif chat.get("role") == "agent":
                 self._append_to_chat("AGENT",chat.get("text"))
-        
+            elif chat.get("role") == "error":
+                self._append_to_chat("ERROR",chat.get("text"))
+            else:
+                self._append_to_chat("SYSTEM",chat.get("text"))
+        self.loading = False
 
         # ROW 0 COL 1 (CHANGE HISTORY)
         self.change_history_frame = tk.Frame(self.root, bg="#07121F")
@@ -129,7 +136,6 @@ class AIChatApp:
         # ROW 2 (SUGGESTED ACTIONS)
         self.suggested_actions_frame = tk.Frame(self.root, bg="#07121F")
         self.suggested_actions_frame.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=10, pady=5)
-        # grid_propagate(False) forces the frame to stay 120px tall, instead of shrinking to wrap the text inside it
         self.suggested_actions_frame.grid_propagate(False) 
         
 
@@ -178,31 +184,35 @@ class AIChatApp:
 
 
     def send_message(self):
+        # Gets the message from the message entry object
         msg = self.message_entry.get("1.0", "end-1c").strip()
         if msg and self.thinking == False:
+            # Adds the user message and also Agent is thinking to show that the message was received
             self._append_to_chat("USER",msg)
-
             self.message_entry.delete("1.0", "end")
+            # Sets thinking to True so messages can't be sent during that time
             self.thinking = True
-
             self._append_to_chat("SYSTEM", "Agent is thinking...")
             try:
+                # Starts a separate thread for sending the message to the agent and getting the response
                 threading.Thread(target=self._send_to_agent, args=(msg,), daemon=True).start()
             except Exception as e:
                 _error(e)
     
 
     def _send_to_agent(self,user_text):
+        # In case of error it will be put in the chatbox instead of the response 
         try:
             user_msg = types.Content(role="user", parts=[types.Part(text=user_text)])
 
             final_text = ""
-
+            # sends the message and gets the events
             events = self.chat_runner.run(
                 user_id="default_user",
                 session_id= self.session_id, 
                 new_message=user_msg
             )
+            # find the final text or the error
             for event in events:
 
                 if hasattr(event, 'content') and event.content and event.content.parts:
@@ -216,7 +226,7 @@ class AIChatApp:
                 raise ValueError("API returned no text. You likely hit a quota limit or safety block.")
             
             ai_reply = final_text
-            self.root.after(0, self._replace_thinking_with_response, "Agent", ai_reply)
+            self.root.after(0, self._replace_thinking_with_response, "AGENT", ai_reply)
 
         except Exception as e:
             error_type = type(e).__name__
@@ -225,7 +235,7 @@ class AIChatApp:
             error_sender = "ERROR"
             formatted_message = f"[{error_type}] {raw_error_message}"
             
-            # Add a friendly note if it smells like a quota issue
+            # Adds a note if it looks like a quota issue
             if "quota" in raw_error_message.lower() or "429" in raw_error_message or "API returned no text" in raw_error_message:
                 formatted_message += "\n\n(It looks like you ran out of Google API quota! Take a quick break and try again later.)"
                 
@@ -235,20 +245,34 @@ class AIChatApp:
             
     
     def _replace_thinking_with_response(self, sender, message):
+        # Deletes the Agent is thinking
         self.chat_history.config(state='normal')
         self.chat_history.delete("end-3l", "end-1c")
         self.chat_history.config(state='disabled')
-        
+        # Adds the message
         self._append_to_chat(sender, message)
         
+        # Sets thinking to False so the user can send another message
         self.thinking = False
         self.message_entry.focus_set()
     
     def _append_to_chat(self,sender,message):
+        # Inserts the message
         self.chat_history.config(state='normal')
         self.chat_history.insert("end", f"{sender}: {message}\n\n")
         self.chat_history.see("end")
         self.chat_history.config(state='disabled')
+        # If the chat isn't loading from startup adds to ui_history to save when closing
+        if not self.loading:
+            if sender == "USER":
+                self.ui_history.append({"role":"user", "text": message})   
+            elif sender == "AGENT":
+                self.ui_history.append({"role":"agent", "text": message})
+            elif sender == "SYSTEM":
+                if not message == "Agent is thinking...":
+                    self.ui_history.append({"role":"system", "text": messae})
+            elif sender == "ERROR":
+                self.ui_history.append({"role":"error", "text": message})
     
     def _error(self,e):
         # prompts an error box 
