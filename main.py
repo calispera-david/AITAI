@@ -24,11 +24,10 @@ os.makedirs(CHATS_FOLDER, exist_ok=True)
 
 def _error(e):
     # prompts an error box 
-    if not isinstance(e, (NameError, ValueError, TypeError, AttributeError, IndexError, KeyError)):
+    if hasattr(e, "code"):
         messagebox.showerror(f"Error Code: {e.code}", e.message)
     else:
         messagebox.showerror("Error", e)
-        print(e)
 
 
             
@@ -57,10 +56,12 @@ def main():
 
             # starts the UI
             root = tk.Tk()
+            app = AIChatApp(root, chat_runner, session_id, session)
             def _close_app():
                 if app.thinking:
                     return 0
                 print("closing")
+                root.focus_force()
                 history_to_save = []
                 save_file_path = os.path.join(os.path.join(PROJECT_ROOT,"chats"),f"{session_id}.json")
                 res = messagebox.askyesno("Exit", "Do you want to save your chat before you exit?")
@@ -95,10 +96,7 @@ def main():
                     if res:
                         root.destroy()
             root.protocol("WM_DELETE_WINDOW", _close_app)
-            app = AIChatApp(root, chat_runner, session_id, session)
             root.mainloop()
-        else:
-            exit()
     except Exception as e:
         print("Initialization failed")
         print(e)
@@ -164,8 +162,7 @@ def verify_api_key():
                     f.write("".strip())
                 # Prompts the user for the key
                 prompt_api_key()
-        else:
-            exit()
+        exit()
 
 
 # Custom launcher to laod or start new chats
@@ -197,13 +194,17 @@ def chat_picker():
         chat_listbox.insert(tk.END, f.replace(".json", ""))
 
     
+
+    ui_history = []
     def on_load_click():
         # Triggered when the user clicks 'Load Workspace'
         selection = chat_listbox.curselection()
         if selection:
             session_id = chat_listbox.get(selection[0])
+            session_path = os.path.join(CHATS_FOLDER, f"{session_id}.json")
+
             result["session_id"] = session_id
-            result["filepath"] = os.path.join(CHATS_FOLDER, f"{session_id}.json")
+            result["filepath"] = session_path
             launcher.destroy() # Close the launcher
         else:
             messagebox.showwarning("Oops", "Please select a chat from the list first!", parent=launcher)
@@ -226,7 +227,11 @@ def chat_picker():
     def on_create_click():
         # Triggered when the user clicks 'Create New'
         raw_name = new_name_entry.get()
-        
+        file_name = raw_name + ".json"
+        if file_name in existing_files:
+            messagebox.showwarning("Warning","This file exists already\nConsider changing the name of your workspace or renaming the existing file")
+            return None
+            
         # If they left it blank or didn't change the placeholder, use a timestamp
         if raw_name.strip() == "" or raw_name == "e.g., housing_analysis":
             session_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -249,7 +254,7 @@ def chat_picker():
 
 
 
-verify_api_key()
+# verify_api_key()
 from agent.agent import agent
 if __name__ == "__main__":
     main()

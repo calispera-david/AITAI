@@ -51,7 +51,15 @@ class AIChatApp:
         # Columns (Horizontal space)
         self.root.grid_columnconfigure(0, weight=6) # Column 0 gets 66.6% of the X axis
         self.root.grid_columnconfigure(1, weight=2) # Column 1 gets 22.2% of the X axis
-
+        self.ui_history = []
+        self.session_path = os.path.join(CHATS_FOLDER, f"{self.session_id}.json")
+        if os.path.exists(self.session_path):
+            try:
+                with open(self.session_path,"r") as f:
+                    self.ui_history = json.load(f)
+            except Exception as e:
+                self._error("Chat found but can't be loaded\nTry again later.")
+                exit()
         self.setup_ui()
 
 
@@ -70,7 +78,8 @@ class AIChatApp:
             width = 1, height = 1, padx = 5,pady = 5
         )
         self.chat_history.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-
+        for chat in self.ui_history:
+            self._append_to_chat(ui_history[0],ui_history[1])
         
 
         # ROW 0 COL 1 (CHANGE HISTORY)
@@ -241,7 +250,6 @@ class AIChatApp:
     
     def _error(self,e):
         # prompts an error box 
-        print("GOT AN ERROR")
         if hasattr(e, "code"):
             messagebox.showerror(f"Error Code: {e.code}", e.message)
         else:
