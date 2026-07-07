@@ -62,14 +62,12 @@ def main():
                 with open(session_path, "r") as f:
                     saved_data = json.load(f)
                 base_time = time.time() - 1000
-                for index,item in enumerate(saved_data):
-                    fake_id = str(uuid.uuid4())
-                    fake_timestamp = base_time + index
+                for item in saved_data:
+                    # fake_id = str(uuid.uuid4())
+                    # fake_timestamp = base_time + index
 
 
                     rebuilt_event = Event(
-                        id=fake_id,
-                        timestamp=fake_timestamp,
                         author="user" if item["role"] == "user" else "agent",
                         turn_complete=True,
                         content=types.Content(
@@ -88,9 +86,11 @@ def main():
                     return 0
                 print("closing")
                 root.focus_force()
+                
                 history_to_save = []
                 save_file_path = os.path.join(os.path.join(PROJECT_ROOT,"chats"),f"{session_id}.json")
                 res = messagebox.askyesno("Exit", "Do you want to save your chat before you exit?")
+                print(res)
                 if res:
                     try:
                         
@@ -121,6 +121,7 @@ def main():
                     res = messagebox.askyesno("Exit", "Are you sure you don't want to save?")
                     if res:
                         root.destroy()
+                
 
 
             root.protocol("WM_DELETE_WINDOW", _close_app)

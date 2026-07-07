@@ -205,8 +205,6 @@ class AIChatApp:
             )
             for event in events:
 
-                print("\n--- RAW ADK EVENT ---")
-                print(event)
                 if hasattr(event, 'content') and event.content and event.content.parts:
                     final_text = event.content.parts[0].text
                     
