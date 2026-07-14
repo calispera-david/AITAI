@@ -16,6 +16,12 @@ import uuid
 from scripts.interface import AIChatApp
 import tkinter as tk
 from tkinter import simpledialog, messagebox, filedialog
+import platform
+
+if platform.system() == "Windows": 
+    from tkinter import Button as OSButton
+else:
+    from tkmacosx import Button as OSButton
 
 PROJECT_ROOT = Path(__file__).parent
 KEY_FILE = os.path.join(PROJECT_ROOT, ".ai_api_key")
@@ -61,11 +67,11 @@ def main():
                 with open(session_path, "r") as f:
                     saved_data = json.load(f)
                 
-                for item in saved_data:
-                    # fake_id = str(uuid.uuid4())
-                    # fake_timestamp = base_time + index
-
+                for index,item in enumerate(saved_data):
                     if item["role"] == "user" or item["role"] == "agent":
+                        if index == len(saved_data) - 1 and item["role"] == "user":
+                            # skip the last user message if it was not responded to
+                            continue
                         rebuilt_event = Event(
                             author="user" if item["role"] == "user" else "agent",
                             turn_complete=True,
@@ -85,15 +91,30 @@ def main():
                     return 0
                 print("closing")
                 root.focus_force()
-                history_to_save = []
-                save_file_path = os.path.join(os.path.join(PROJECT_ROOT,"chats"),f"{session_id}.json")
-                res = messagebox.askyesno("Exit", "Do you want to save your chat before you exit?")
-                if res:
+                root.grab_release()
+
+                dialogWindow = tk.Toplevel(root)
+                dialogWindow.title("Exit")
+                dialogWindow.geometry("400x150")
+                dialogWindow.configure(bg="#07121F")
+
+                dialogWindow.transient(root)
+                dialogWindow.grab_set()
+                dialogWindow.focus_set()
+                def _exit_without_saving():
+                    dialogWindow.destroy()
+                    root.destroy() 
+
+                tk.Label(dialogWindow, bg = "#07121F", text="Do you want to save your chat before exiting?", pady=20).pack()
+                def _save_and_exit():
+                    history_to_save = []
+                    save_file_path = os.path.join(os.path.join(PROJECT_ROOT,"chats"),f"{session_id}.json")
                     try:
                         
                         history = app.ui_history
                         for index,entry in enumerate(history):
                             if not (entry["role"] == "user" and index == len(history) - 1):
+                                # skips the last message if there was no response
                                 history_to_save.append({
                                     "role": entry["role"],
                                     "text": entry["text"]
@@ -109,12 +130,15 @@ def main():
                         res = messagebox.askyesno("Error", "Error while saving \nDo you want to exit without saving?")
                         if res:
                             root.destroy()
-                else:
-                    res = messagebox.askyesno("Exit", "Are you sure you don't want to save?")
-                    if res:
-                        root.destroy()
                 
+                OSButton(dialogWindow, text="Yes", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command = _save_and_exit).pack( side = tk.LEFT, padx=20, pady=20, ipadx=10, ipady=5)
+                OSButton(dialogWindow, text="No", bg="#1E3E62", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command= _exit_without_saving).pack( side = tk.LEFT , pady=20, ipadx=10, ipady=5)
+                OSButton(dialogWindow, text="Cancel", bg="#1E3E62", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command = dialogWindow.destroy).pack( side = tk.LEFT, padx = 20, pady=10, ipadx=10, ipady=5)
             root.protocol("WM_DELETE_WINDOW", _close_app)
+            try:
+                root.createcommand('::tk::mac::QuitScript', _close_app)
+            except Exception:
+                pass
             root.mainloop()
     except Exception as e:
         print("Initialization failed")
@@ -229,7 +253,7 @@ def chat_picker():
         else:
             messagebox.showwarning("Oops", "Please select a chat from the list first!", parent=launcher)
     
-    tk.Button(launcher, text="Load Workspace", bg="#1E3E62", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=on_load_click).pack(pady=(5, 20), ipadx=10, ipady=5)
+    OSButton(launcher, text="Load Workspace", bg="#1E3E62", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=on_load_click).pack(pady=(5, 20), ipadx=10, ipady=5)
 
     tk.Frame(launcher, bg="#1E3E62", height=2).pack(fill="x", padx=30, pady=10)
 
@@ -264,7 +288,7 @@ def chat_picker():
             # json_file = open(result["filepath"], "w", encoding="utf-8")
             launcher.destroy() # Close the launcher
 
-    tk.Button(launcher, text="Create New", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=on_create_click).pack(pady=(5, 30), ipadx=20, ipady=5)
+    OSButton(launcher, text="Create New", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=on_create_click).pack(pady=(5, 30), ipadx=20, ipady=5)
 
     launcher.wait_window()
 
@@ -272,7 +296,7 @@ def chat_picker():
 
 
 
-verify_api_key()
+# verify_api_key()
 from agent.agent import agent
 if __name__ == "__main__":
     main()

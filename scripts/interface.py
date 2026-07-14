@@ -7,7 +7,12 @@ import threading
 from google.genai import types
 import asyncio
 import json
+import platform
 
+if platform.system() == "Windows":
+    from tkinter import Button as OSButton
+else:
+    from tkmacosx import Button as OSButton
 # File to store the API key locally
 PROJECT_ROOT = Path(__file__).parent.parent
 KEY_FILE = os.path.join(PROJECT_ROOT, ".ai_api_key")
@@ -83,7 +88,10 @@ class AIChatApp:
         )
         self.chat_history.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
         # Loads chat from ui_history (if it's a new chat it won't do anything since ui_history starts as an empty list)
-        for chat in self.ui_history:
+        for index,chat in enumerate(self.ui_history):
+            if index == len(self.ui_history) - 1 and chat.get("role") == "user":
+                # skip the last user message if it was not responded to
+                continue
             if chat.get("role") == "user":
                 self._append_to_chat("USER",chat.get("text"))
             elif chat.get("role") == "agent":
@@ -126,7 +134,7 @@ class AIChatApp:
         # self.message_entry.bind("<Return>", self.send_message)
 
 
-        self.send_button = tk.Button(
+        self.send_button = OSButton(
             self.input_frame, text="SEND", font=("Arial Bold", 13),
             bg="#FF6500", fg="white", borderwidth=0, cursor="hand2", command=self.send_message)
         self.send_button.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, 10), pady=5, ipadx=20)
@@ -155,7 +163,7 @@ class AIChatApp:
         self.accept_changes_frame = tk.Frame(self.root, bg = "#07121F")
         self.accept_changes_frame.grid(row = 3, column = 0, columnspan = 2, sticky = "nsew", padx = 10, pady = (5,10))
 
-        self.accept_changes = tk.Button(self.accept_changes_frame, text="Accept Changes", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0)
+        self.accept_changes = OSButton(self.accept_changes_frame, text="Accept Changes", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0)
         self.accept_changes.pack(side = tk.LEFT, fill = tk.X, expand = True, padx = 5)
 
 
@@ -197,7 +205,7 @@ class AIChatApp:
                 # Starts a separate thread for sending the message to the agent and getting the response
                 threading.Thread(target=self._send_to_agent, args=(msg,), daemon=True).start()
             except Exception as e:
-                _error(e)
+                self._error(e)
     
 
     def _send_to_agent(self,user_text):
