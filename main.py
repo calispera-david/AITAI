@@ -296,7 +296,7 @@ def chat_picker():
 
 
 
-# verify_api_key()
+verify_api_key()
 from agent.agent import agent
 if __name__ == "__main__":
     main()
