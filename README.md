@@ -26,3 +26,5 @@ Whenever you want to use the app:
 -run "python3 main.py"
 
 Fixed problems on Mac devices
+
+private workspace
