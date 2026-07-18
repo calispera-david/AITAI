@@ -13,25 +13,31 @@ if platform.system() == "Windows":
     from tkinter import Button as OSButton
 else:
     from tkmacosx import Button as OSButton
-# File to store the API key locally
+
+# File directories
+if platform.system() == "Windows":
+    DATA_DIR = os.path.join(os.getenv("LOCALAPPDATA"),"Calispera")
+    DATA_DIR_PROJECT = os.path.join(DATA_DIR,"AITAI")
+else:
+    DATA_DIR = os.path.join(os.path.join(Path.home(),"Documents"),"Calispera")
+    DATA_DIR_PROJECT = os.path.join(DATA_DIR,"AITAI")
+
 PROJECT_ROOT = Path(__file__).parent.parent
 KEY_FILE = os.path.join(PROJECT_ROOT, ".ai_api_key")
-CHATS_FOLDER  = os.path.join(PROJECT_ROOT, "chats")
+# KEY_FILE = os.path.join(DATA_DIR, ".ai_api_key")
+CHATS_FOLDER  = os.path.join(DATA_DIR_PROJECT, "chats")
 
 
-# KEY_FILE = os.path.join(os.path.join(Path.home(), "Calispera"),".ai_api_key")
-# CHATS_FOLDER  = os.path.join(os.path.join(Path.home(), "Calispera"),"chats")
 
-
+# the AIChatApp class is responsible for the main app window and the pop up window on closing
 class AIChatApp:
-    def __init__(self, root, chat_runner,session_id,session):
+    def __init__(self, root,session_id, ui_history,agent_main, _save_and_exit):
         # startup tk stuff
         self.root = root
         self.root.title(f"AITAI: {session_id}")
         self.root.geometry("1080x840")
         self.root.configure(bg="#000000")
-        # gets the chat_runner from main.py which initializes a session
-        self.chat_runner = chat_runner
+
         # A thinking boolean which allows to send messages only after the agent finished responding or at the start of the conversation
         # A loading boolean which stops appending messages to the history while it loads them
         self.thinking = False
@@ -39,17 +45,9 @@ class AIChatApp:
         # Gets the session_id from main.py which consists of the date,hours,minutes and seconds
         # Will later add chat saving and loading based on the dates
         self.session_id = session_id
-        self.session = session
+        self.agent_main = agent_main
         print("Session ID: ", session_id)
         
-        # Self explanatory, if the api file is not found it prompts for one
-        self.api_key = self.get_or_request_api()
-        if not self.api_key:
-            # If the user doesn't input any text
-            messagebox.showerror("Error", "A valid Google API key is required to use this app.")
-            self.root.destroy()
-            return
-
         # Rows (Vertical space)
         self.root.grid_rowconfigure(0, weight=25) # Row 0 gets 58.8% of the Y axis
         self.root.grid_rowconfigure(1, weight=1) # Row 1 gets 5.8% of the Y axis
@@ -59,17 +57,16 @@ class AIChatApp:
         # Columns (Horizontal space)
         self.root.grid_columnconfigure(0, weight=6) # Column 0 gets 66.6% of the X axis
         self.root.grid_columnconfigure(1, weight=2) # Column 1 gets 22.2% of the X axis
-        self.ui_history = []
         self.session_path = os.path.join(CHATS_FOLDER, f"{self.session_id}.json")
-        # If the file exists load it
-        if os.path.exists(self.session_path):
-            try:
-                with open(self.session_path,"r") as f:
-                    self.ui_history = json.load(f)
-            except Exception as e:
-                self._error(e)
-                self._error("Chat found but can't be loaded\nTry again later.")
-                exit()
+        # Gets the history (empty if a new chat)
+        self.ui_history = ui_history
+        self._save_and_exit = _save_and_exit
+
+        self.root.protocol("WM_DELETE_WINDOW", self.close_window)
+        try:
+            root.createcommand('::tk::mac::QuitScript', self.close_window)
+        except Exception:
+            pass
         self.setup_ui()
 
 
@@ -167,29 +164,6 @@ class AIChatApp:
         self.accept_changes.pack(side = tk.LEFT, fill = tk.X, expand = True, padx = 5)
 
 
-    def get_or_request_api(self):
-        # Checks for the file in the chosen path
-        if (os.path.exists(KEY_FILE)):
-            with open(KEY_FILE, "r") as f:
-                key_text = f.read().strip()
-                if key_text:
-                    # if a key is found it returns it
-                    return key_text
-        
-        # if not, prompts the user for it
-        key = simpledialog.askstring(
-            "Valid Google API Key Required",
-            "Enter your Google API key \n Other LLM options not yet available"
-        )
-            
-        # writes the key into file 
-        if key:
-            with open(KEY_FILE, "w") as f:
-                f.write(key.strip())
-            return key
-        
-        return None
-
 
     def send_message(self):
         # Gets the message from the message entry object
@@ -211,45 +185,23 @@ class AIChatApp:
     def _send_to_agent(self,user_text):
         # In case of error it will be put in the chatbox instead of the response 
         try:
-            user_msg = types.Content(role="user", parts=[types.Part(text=user_text)])
-
-            final_text = ""
-            # sends the message and gets the events
-            events = self.chat_runner.run(
-                user_id="default_user",
-                session_id= self.session_id, 
-                new_message=user_msg
-            )
-            # find the final text or the error
-            for event in events:
-
-                if hasattr(event, 'content') and event.content and event.content.parts:
-                    final_text = event.content.parts[0].text
-                    
-
-                elif hasattr(event, 'error_code') and event.error_code:
-                    error_details = getattr(event, 'error_message', 'Unknown API Error')
-                    raise RuntimeError(f"{event.error_code} - {error_details}")
-            if not final_text:
-                raise ValueError("API returned no text. You likely hit a quota limit or safety block.")
-            
-            ai_reply = final_text
+            ai_reply = self.agent_main.generate_content(user_text)
             self.root.after(0, self._replace_thinking_with_response, "AGENT", ai_reply)
-
         except Exception as e:
             error_type = type(e).__name__
             raw_error_message = str(e)
             
             error_sender = "ERROR"
             formatted_message = f"[{error_type}] {raw_error_message}"
-            
             # Adds a note if it looks like a quota issue
             if "quota" in raw_error_message.lower() or "429" in raw_error_message or "API returned no text" in raw_error_message:
                 formatted_message += "\n\n(It looks like you ran out of Google API quota! Take a quick break and try again later.)"
-                
+            
+            self.root.after(0,self._error,e)
             # Push the formatted error to the chat screen
-            self.root.after(0, self._replace_thinking_with_response, error_sender, formatted_message)
-            self._error(e)
+            self.root.after(0, self._append_to_chat, error_sender, formatted_message)
+            self.thinking = False
+
             
     
     def _replace_thinking_with_response(self, sender, message):
@@ -278,18 +230,145 @@ class AIChatApp:
                 self.ui_history.append({"role":"agent", "text": message})
             elif sender == "SYSTEM":
                 if not message == "Agent is thinking...":
-                    self.ui_history.append({"role":"system", "text": messae})
+                    self.ui_history.append({"role":"system", "text": message})
             elif sender == "ERROR":
                 self.ui_history.append({"role":"error", "text": message})
     
     def _error(self,e):
+        error_win  = tk.Toplevel(self.root)
+        error_win.configure(bg="#07121F")
+
+        error_win.transient(self.root) 
+        error_win.grab_set()
+
         # prompts an error box 
         if hasattr(e, "code"):
-            messagebox.showerror(f"Error Code: {e.code}", e.message)
+            error_win.title(f"Error Code: {e.code}")
         else:
-            messagebox.showerror("Error", e)
+            error_win.title("Error")
+        msg_label = tk.Label(error_win, text=str(e),bg = "#07121F", fg="#FF6500", wraplength=300)
+        msg_label.pack(padx=20, pady=20)
 
+    # Makes a new window to ask if to save, cancel or to not save the current chat
+    def close_window(self):
+        if self.thinking:
+            return 0
+        print("closing")
+        self.root.focus_force()
+        self.root.grab_release()
+
+        dialogWindow = tk.Toplevel(self.root)
+        dialogWindow.title("Exit")
+        dialogWindow.geometry("500x170")
+        dialogWindow.configure(bg="#07121F")
+
+        dialogWindow.transient(self.root)
+        dialogWindow.grab_set()
+        dialogWindow.focus_set()
+
+        tk.Label(dialogWindow, bg = "#07121F",fg = "white", font = ("Arial Bold",12), text="Do you want to save your chat before exiting?", pady=20).pack()
+
+        def _exit_without_saving(self):
+            # kills the whole app as it is
+            dialogWindow.destroy()
+            self.root.destroy() 
+
+        btn_frame = tk.Frame(dialogWindow, bg = "#07121F")
+        btn_frame.pack(pady = 20)
+                
+        btn_wdth = 10
+        if platform.system() == "Windows":
+            btn_wdth = 1
+
+        # Button "Yes" calls the _save_and_exit function from main which handles the saving
+        OSButton(btn_frame, text="Yes", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0, width = 15 * btn_wdth, cursor="hand2", command = self._save_and_exit).pack( side = tk.LEFT,padx = 20)
+        # Button "Cancel" deletes the pop up window, letting the app itself open
+        OSButton(btn_frame, text="Cancel", bg="#1E3E62", fg="white", font=("Arial Bold", 12), borderwidth=0, width = 10 * btn_wdth,  cursor="hand2", command = dialogWindow.destroy).pack( side = tk.LEFT)
+        # Button "No" calls the _exit_without_saving function found above
+        OSButton(btn_frame, text="No", bg="#1E3E62", fg="white", font=("Arial Bold", 12), borderwidth=0, width = 15 * btn_wdth, cursor="hand2", command= lambda: _exit_without_saving(self)).pack( side = tk.LEFT, padx = 20)
+
+
+
+
+# The Picker class is responsible for the launcher window
+class Picker:
+    def __init__(self,launcher,existing_files,load_chat,create_new_chat):
+        self.existing_files = existing_files
+        self.result = {"session_id": None, "filepath": None}    
+        self.launcher = launcher
+        self.load_chat = load_chat
+        self.create_new_chat = create_new_chat
+        self.launcher.title("AITAI Launcher")
+        self.launcher.geometry("450x500")
+        self.launcher.configure(bg="#07121F")   
+
+        self.setup_ui()
+
+    def setup_ui(self):
+        tk.Label(self.launcher, text="Select an Existing Workspace:", bg="#07121F", fg="white", font=("Arial Bold", 14)).pack(pady=(20, 5))
+
+        # Create a frame to hold the list and scrollbar
+        list_frame = tk.Frame(self.launcher, bg="#07121F")
+        list_frame.pack(fill="both", expand=True, padx=30, pady=5)
         
-# root = tk.Tk()
-# app = AIChatApp(root)
-# root.mainloop()
+        scrollbar = tk.Scrollbar(list_frame)
+        scrollbar.pack(side="right", fill="y")
+        
+        self.chat_listbox = tk.Listbox(list_frame, font=("Arial", 12), bg="#0B192C", fg="white", selectbackground="#FF6500", borderwidth=0, yscrollcommand=scrollbar.set)
+        self.chat_listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self.chat_listbox.yview)
+        
+        for f in self.existing_files:
+            # Remove the .json extension
+            self.chat_listbox.insert(tk.END, f.replace(".json", ""))
+
+        OSButton(self.launcher, text="Load Workspace", bg="#1E3E62", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=self.on_load_click).pack(pady=(5, 20), ipadx=10, ipady=5)
+
+
+        tk.Frame(self.launcher, bg="#1E3E62", height=2).pack(fill="x", padx=30, pady=10)
+
+        tk.Label(self.launcher, text="Or Create a New Workspace:", bg="#07121F", fg="white", font=("Arial Bold", 14)).pack(pady=(10, 5))
+
+        self.new_name_entry = tk.Entry(self.launcher, font=("Arial", 12), bg="#0B192C", fg="white", borderwidth=0, insertbackground="white")
+        self.new_name_entry.pack(fill="x", padx=30, pady=5, ipady=5)
+        self.new_name_entry.insert(0, "e.g., housing_analysis")
+
+        self.new_name_entry.bind("<FocusIn>", self.clear_placeholder)
+
+        OSButton(self.launcher, text="Create New", bg="#FF6500", fg="white", font=("Arial Bold", 12), borderwidth=0, cursor="hand2", command=self.on_create_click).pack(pady=(5, 30), ipadx=20, ipady=5)
+
+    def on_load_click(self):
+        session_id = None
+        selection = self.chat_listbox.curselection()
+        if selection:
+            session_id = self.chat_listbox.get(selection[0])
+            session_path = os.path.join(CHATS_FOLDER, f"{session_id}.json")
+
+            self.load_chat(session_id, session_path)
+            self.launcher.destroy() # Close the launcher
+        else:
+            messagebox.showwarning("Oops", "Please select a chat from the list first!", parent=self.launcher)
+
+    def clear_placeholder(self, event):
+        if self.new_name_entry.get() == "e.g., housing_analysis":
+            self.new_name_entry.delete(0, tk.END)
+    
+    def on_create_click(self):
+        session_id = None
+        # Triggered when the user clicks 'Create New'
+        raw_name = self.new_name_entry.get()
+        file_name = raw_name + ".json"
+        if file_name in self.existing_files:
+            messagebox.showwarning("Warning","This file exists already\nConsider changing the name of your workspace or renaming the existing file")
+        else:     
+            # If they left it blank or didn't change the placeholder, use a timestamp
+            if raw_name.strip() == "" or raw_name == "e.g., housing_analysis":
+                session_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            else:
+                # Clean weird characters
+                session_id = "".join([c for c in raw_name if c.isalnum() or c in (' ', '-', '_')]).strip()
+
+            self.create_new_chat(session_id)
+            # decided to NOT start an empty file from the start
+            # json_file = open(result["filepath"], "w", encoding="utf-8")
+            self.launcher.destroy() # Close the launcher
